@@ -11,6 +11,10 @@ export interface Tile {
   phi?: number
   depth?: number
   cubeVertex?: { x: number; y: number; z: number }
+  // store raw 3D position for renderer to rotate
+  rawX?: number
+  rawY?: number
+  rawZ?: number
 }
 
 export interface LayoutParams {
@@ -24,25 +28,30 @@ export interface LayoutParams {
 
 const GOLDEN_ANGLE = 2.39996
 
-// Size multipliers per shape — tuned so the shape is readable at default size=1
-// User scrubs size to go bigger/smaller from this baseline
+// spread=1 now feels spacious — multipliers tuned so default looks like old spread=5
+const SPREAD_SCALE = {
+  spiral: 140,  // was 28, now 5x bigger
+  orbit:  220,  // orbit ring radius multiplier
+  globe:  800,  // was 160, now 5x
+  cube:   260,  // was 52, now 5x
+}
+
 const SIZE_SCALE = {
-  spiral: 0.55, // tiles shrink toward center anyway, this keeps outer tiles reasonable
-  orbit:  0.45, // small enough that ring gaps are visible
-  globe:  0.50, // sphere surface readable without overlap
-  cube:   0.70, // grid readable, tiles fill their cell but don't overlap
+  spiral: 0.55,
+  orbit:  0.50,
+  globe:  0.50,
+  cube:   0.70,
 }
 
 export function spiralLayout(params: LayoutParams): Tile[] {
   const { count, spread, size, chaos = 0 } = params
   const n = Math.max(count, 24)
-  const baseSpread = spread * 28
+  const baseSpread = spread * SPREAD_SCALE.spiral
   const tiles: Tile[] = []
 
   for (let i = 0; i < n; i++) {
     const angle = i * GOLDEN_ANGLE
     const radius = baseSpread * Math.sqrt(i)
-    // Tiles scale up along the arm — inner tiles small, outer tiles larger
     const scaledSize = size * SIZE_SCALE.spiral * (0.4 + (i / n) * 0.6)
     tiles.push({
       x: Math.cos(angle) * radius + (Math.random() - 0.5) * chaos * 60,
@@ -65,7 +74,7 @@ export function orbitLayout(params: LayoutParams): Tile[] {
   let placed = 0
 
   for (let r = 0; r < rings && placed < n; r++) {
-    const radius = r === 0 ? 0 : (r / rings) * spread * 220 + 60
+    const radius = r === 0 ? 0 : (r / rings) * spread * SPREAD_SCALE.orbit + spread * 60
     const actualPerRing = Math.min(
       r === 0 ? 1 : Math.round(6 + r * 4),
       n - placed
@@ -94,7 +103,7 @@ export function globeLayout(params: LayoutParams): Tile[] {
   const { count, spread, size, chaos = 0 } = params
   const n = Math.max(count, 20)
   const tiles: Tile[] = []
-  const radius = spread * 160
+  const radius = spread * SPREAD_SCALE.globe
   const goldenRatio = (1 + Math.sqrt(5)) / 2
 
   for (let i = 0; i < n; i++) {
@@ -127,31 +136,30 @@ export function cubeLayout(params: LayoutParams): Tile[] {
   const { count, spread, size, chaos = 0 } = params
   const tiles: Tile[] = []
 
-  // count → grid dimension
-  // 1–4  → 2×2×2  (8 tiles)
-  // 5–13 → 3×3×3  (27 tiles)
-  // 14+  → 4×4×4  (64 tiles)
   const gridSize = count <= 4 ? 2 : count <= 13 ? 3 : 4
   const totalInGrid = gridSize * gridSize * gridSize
-  const step = spread * 52
-  const offset = ((gridSize - 1) / 2) * step
+  const step = spread * SPREAD_SCALE.cube
+  const halfGrid = (gridSize - 1) / 2
 
   let placed = 0
   outer: for (let xi = 0; xi < gridSize; xi++) {
     for (let yi = 0; yi < gridSize; yi++) {
       for (let zi = 0; zi < gridSize; zi++) {
+        // Store raw 3D grid position — renderer will rotate these
+        const rx = (xi - halfGrid) * step + (Math.random() - 0.5) * chaos * 10
+        const ry = (yi - halfGrid) * step + (Math.random() - 0.5) * chaos * 10
+        const rz = (zi - halfGrid) * step + (Math.random() - 0.5) * chaos * 10
+
         tiles.push({
-          x: xi * step - offset + (Math.random() - 0.5) * chaos * 10,
-          y: yi * step - offset + (Math.random() - 0.5) * chaos * 10,
+          x: rx,
+          y: ry,
           size: size * SIZE_SCALE.cube,
           angle: (Math.random() - 0.5) * chaos * 0.3,
           imageIndex: placed,
-          cubeVertex: {
-            x: xi / Math.max(gridSize - 1, 1) - 0.5,
-            y: yi / Math.max(gridSize - 1, 1) - 0.5,
-            z: zi / Math.max(gridSize - 1, 1) - 0.5,
-          },
-          depth: zi * step - offset,
+          rawX: rx,
+          rawY: ry,
+          rawZ: rz,
+          depth: rz,
         })
         placed++
         if (placed >= totalInGrid) break outer
