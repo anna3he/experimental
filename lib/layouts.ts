@@ -11,6 +11,7 @@ export interface Tile {
   phi?: number
   depth?: number
   cubeVertex?: { x: number; y: number; z: number }
+  cubeFace?: number
 }
 
 export interface LayoutParams {
@@ -24,27 +25,22 @@ export interface LayoutParams {
 
 const GOLDEN_ANGLE = 2.39996
 
-// How many tiles each shape needs to look complete regardless of count
 const SHAPE_MIN_TILES: Record<string, number> = {
   spiral: 24,
   orbit: 16,
   globe: 20,
-  cube: 8,
+  cube: 6, // 6 faces
 }
 
-// Repeat imageIndex so tiles always cycle through available images
-function imageIndex(i: number, _total: number): number {
+function imageIdx(i: number): number {
   return i
 }
 
 export function spiralLayout(params: LayoutParams): Tile[] {
   const { count, spread, size, chaos = 0 } = params
-  const tiles: Tile[] = []
-
-  // Always render at least SHAPE_MIN_TILES tiles so shape is obvious
   const n = Math.max(count, SHAPE_MIN_TILES.spiral)
-  // Tighter, more visible spiral: larger base spread
   const baseSpread = spread * 28
+  const tiles: Tile[] = []
 
   for (let i = 0; i < n; i++) {
     const angle = i * GOLDEN_ANGLE
@@ -58,7 +54,7 @@ export function spiralLayout(params: LayoutParams): Tile[] {
       y: Math.sin(angle) * radius + chaosY,
       size: size * (1 + (Math.random() - 0.5) * chaos * 0.4),
       angle: tileAngle,
-      imageIndex: imageIndex(i, n),
+      imageIndex: imageIdx(i),
       baseAngle: angle,
       baseRadius: radius,
     })
@@ -68,9 +64,8 @@ export function spiralLayout(params: LayoutParams): Tile[] {
 
 export function orbitLayout(params: LayoutParams): Tile[] {
   const { count, spread, size, chaos = 0 } = params
-  const tiles: Tile[] = []
   const n = Math.max(count, SHAPE_MIN_TILES.orbit)
-
+  const tiles: Tile[] = []
   const rings = Math.max(1, Math.round(1 + spread * 3))
   let placed = 0
 
@@ -85,14 +80,13 @@ export function orbitLayout(params: LayoutParams): Tile[] {
       const chaosA = (Math.random() - 0.5) * chaos * 0.3
       const actualAngle = angle + chaosA
       const actualRadius = Math.max(0, radius + chaosR)
-      const tileAngle = (Math.random() - 0.5) * chaos * 0.5
 
       tiles.push({
         x: Math.cos(actualAngle) * actualRadius,
         y: Math.sin(actualAngle) * actualRadius,
         size: size * (1 + (Math.random() - 0.5) * chaos * 0.4),
-        angle: tileAngle,
-        imageIndex: imageIndex(placed, n),
+        angle: (Math.random() - 0.5) * chaos * 0.5,
+        imageIndex: imageIdx(placed),
         baseAngle: angle,
         baseRadius: actualRadius,
         ringIndex: r,
@@ -105,18 +99,16 @@ export function orbitLayout(params: LayoutParams): Tile[] {
 
 export function globeLayout(params: LayoutParams): Tile[] {
   const { count, spread, size, chaos = 0 } = params
-  const tiles: Tile[] = []
   const n = Math.max(count, SHAPE_MIN_TILES.globe)
+  const tiles: Tile[] = []
   const radius = spread * 180
   const goldenRatio = (1 + Math.sqrt(5)) / 2
 
   for (let i = 0; i < n; i++) {
     const theta = (2 * Math.PI * i) / goldenRatio
     const phi = Math.acos(1 - (2 * (i + 0.5)) / n)
-    const chaosTheta = (Math.random() - 0.5) * chaos * 0.5
-    const chaosPhi = (Math.random() - 0.5) * chaos * 0.3
-    const finalTheta = theta + chaosTheta
-    const finalPhi = phi + chaosPhi
+    const finalTheta = theta + (Math.random() - 0.5) * chaos * 0.5
+    const finalPhi = phi + (Math.random() - 0.5) * chaos * 0.3
 
     const x = radius * Math.sin(finalPhi) * Math.cos(finalTheta)
     const y = radius * Math.cos(finalPhi)
@@ -124,11 +116,10 @@ export function globeLayout(params: LayoutParams): Tile[] {
     const depth = z / radius
 
     tiles.push({
-      x,
-      y,
+      x, y,
       size: size * (0.5 + (depth + 1) * 0.35) * (1 + (Math.random() - 0.5) * chaos * 0.3),
       angle: (Math.random() - 0.5) * chaos * 0.4,
-      imageIndex: imageIndex(i, n),
+      imageIndex: imageIdx(i),
       theta: finalTheta,
       phi: finalPhi,
       depth,
@@ -139,35 +130,46 @@ export function globeLayout(params: LayoutParams): Tile[] {
   return tiles
 }
 
+// Cube: one image tile per face, filling each face completely.
+// count controls how many faces are shown (1-6). Default shows all 6.
 export function cubeLayout(params: LayoutParams): Tile[] {
-  const { count, spread, size, chaos = 0 } = params
+  const { count, spread, size } = params
   const tiles: Tile[] = []
-  const n = Math.max(count, SHAPE_MIN_TILES.cube)
 
-  const gridSize = Math.max(2, Math.ceil(Math.cbrt(n)))
-  const step = 2 / (gridSize - 1 || 1)
+  // 6 faces: front, back, left, right, top, bottom
+  // Each face defined by its center normal and up vector
+  const faceSize = spread * 160
 
-  let placed = 0
-  for (let xi = 0; xi < gridSize && placed < n; xi++) {
-    for (let yi = 0; yi < gridSize && placed < n; yi++) {
-      for (let zi = 0; zi < gridSize && placed < n; zi++) {
-        const x = -1 + xi * step + (Math.random() - 0.5) * chaos * 0.3
-        const y = -1 + yi * step + (Math.random() - 0.5) * chaos * 0.3
-        const z = -1 + zi * step + (Math.random() - 0.5) * chaos * 0.3
+  const faces = [
+    { nx: 0,  ny: 0,  nz: 1,  label: 'front'  },
+    { nx: 0,  ny: 0,  nz: -1, label: 'back'   },
+    { nx: -1, ny: 0,  nz: 0,  label: 'left'   },
+    { nx: 1,  ny: 0,  nz: 0,  label: 'right'  },
+    { nx: 0,  ny: -1, nz: 0,  label: 'top'    },
+    { nx: 0,  ny: 1,  nz: 0,  label: 'bottom' },
+  ]
 
-        tiles.push({
-          x: x * spread * 80,
-          y: y * spread * 80,
-          size: size * (1 + (Math.random() - 0.5) * chaos * 0.3),
-          angle: 0,
-          imageIndex: imageIndex(placed, n),
-          cubeVertex: { x, y, z },
-          depth: z,
-        })
-        placed++
-      }
-    }
-  }
+  // count maps to how many faces to show (min 1, max 6)
+  const numFaces = Math.min(6, Math.max(1, Math.round((count / 35) * 6) || 6))
+  const activeFaces = faces.slice(0, numFaces)
+
+  activeFaces.forEach((face, fi) => {
+    // Place tile at face center (half faceSize out along normal)
+    const cx = face.nx * faceSize * 0.5
+    const cy = face.ny * faceSize * 0.5
+    const cz = face.nz * faceSize * 0.5
+
+    tiles.push({
+      x: cx,
+      y: cy,
+      size: size,
+      angle: 0,
+      imageIndex: imageIdx(fi),
+      cubeVertex: { x: face.nx, y: face.ny, z: face.nz },
+      depth: cz,
+      cubeFace: fi,
+    })
+  })
 
   tiles.sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0))
   return tiles
