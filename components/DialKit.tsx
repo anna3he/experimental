@@ -8,7 +8,7 @@ import PillToggle from './PillToggle'
 import EmptyState from './EmptyState'
 import PhotoManageModal from './PhotoManageModal'
 
-const MAX_IMAGES = 35
+const MAX_IMAGES = 75
 
 function seededRandom(seed: number) {
   const x = Math.sin(seed) * 10000
@@ -30,7 +30,7 @@ const SHAPE_DEFAULTS: Record<ShapeType, Partial<DialParams>> = {
   // orbit: high count fills the rings, size=1 but layout multiplies by 0.45 so tiles are small
   orbit:   { count: 24, spread: 1.0, size: 1.0 },
   // globe: fill the sphere surface, layout multiplies size by 0.5
-  globe:   { count: 35, spread: 1.0, size: 1.0 },
+  globe:   { count: 50, spread: 1.0, size: 1.0 },
   // cube: 2x2x2 grid by default
   cube:    { count: 8,  spread: 1.0, size: 1.0 },
 }
@@ -115,7 +115,7 @@ export default function DialKit() {
       e.preventDefault()
       if (focusedDial) {
         const dialConfig: Record<keyof DialParams, { min: number; max: number; step: number }> = {
-          count:  { min: 1,   max: 35,  step: 1   },
+          count:  { min: 1,   max: 75,  step: 1   },
           spread: { min: 0.2, max: 5,   step: 0.1 },
           size:   { min: 0.3, max: 3,   step: 0.1 },
           radius: { min: 0,   max: 24,  step: 1   },
