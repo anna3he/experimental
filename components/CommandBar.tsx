@@ -44,7 +44,7 @@ const DIALS: {
   max: number
   step: number
 }[] = [
-  { key: 'count',  label: 'Count',  min: 1,   max: 35,  step: 1   },
+  { key: 'count',  label: 'Count',  min: 1,   max: 75,  step: 1   },
   { key: 'spread', label: 'Spread', min: 0.2,  max: 5,   step: 0.1 },
   { key: 'size',   label: 'Size',   min: 0.3,  max: 3,   step: 0.1 },
   { key: 'radius', label: 'Radius', min: 0,    max: 24,  step: 1   },
