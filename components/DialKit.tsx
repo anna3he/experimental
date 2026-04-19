@@ -1,12 +1,6 @@
 'use client'
 
-import {
-  useRef,
-  useEffect,
-  useState,
-  useCallback,
-  useMemo,
-} from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { computeLayout, type ShapeType, type Tile } from '@/lib/layouts'
 import { render as renderCanvas, exportCanvas } from '@/lib/renderer'
 import CommandBar, { type DialParams } from './CommandBar'
@@ -21,17 +15,24 @@ function seededRandom(seed: number) {
   return x - Math.floor(x)
 }
 
-function buildSeededLayout(
-  shape: ShapeType,
-  params: DialParams,
-  seed: number
-): Tile[] {
+function buildSeededLayout(shape: ShapeType, params: DialParams, seed: number): Tile[] {
   let idx = 0
   const origRand = Math.random
   Math.random = () => seededRandom(seed + idx++)
   const tiles = computeLayout(shape, params)
   Math.random = origRand
   return tiles
+}
+
+// Good-looking defaults per shape
+const SHAPE_DEFAULTS: Record<ShapeType, Partial<DialParams>> = {
+  spiral:  { count: 12, spread: 1.0, size: 1.0 },
+  // orbit: high count fills the rings, size=1 but layout multiplies by 0.45 so tiles are small
+  orbit:   { count: 24, spread: 1.0, size: 1.0 },
+  // globe: fill the sphere surface, layout multiplies size by 0.5
+  globe:   { count: 35, spread: 1.0, size: 1.0 },
+  // cube: 2x2x2 grid by default
+  cube:    { count: 8,  spread: 1.0, size: 1.0 },
 }
 
 export default function DialKit() {
@@ -47,7 +48,7 @@ export default function DialKit() {
     count: 12,
     spread: 1,
     size: 1,
-    radius: 0,   // default: no border radius
+    radius: 0,
     speed: 1,
   })
   const [layoutSeed, setLayoutSeed] = useState(42)
@@ -63,13 +64,11 @@ export default function DialKit() {
 
   const refreshSeed = useCallback(() => setLayoutSeed((s) => s + 1), [])
 
-  // ----- Image loading -----
   const handleUpload = useCallback((files: FileList) => {
     const arr = Array.from(files).slice(0, MAX_IMAGES)
     setImages((prev) => {
       const remaining = MAX_IMAGES - prev.length
-      const toLoad = arr.slice(0, remaining)
-      const newImgs = toLoad.map((file) => {
+      const newImgs = arr.slice(0, remaining).map((file) => {
         const img = new Image()
         img.crossOrigin = 'anonymous'
         img.src = URL.createObjectURL(file)
@@ -87,7 +86,6 @@ export default function DialKit() {
     [handleUpload]
   )
 
-  // ----- Pan & zoom -----
   const isPanning = useRef(false)
   const lastPointer = useRef({ x: 0, y: 0 })
   const lastTouchDist = useRef<number | null>(null)
@@ -95,9 +93,7 @@ export default function DialKit() {
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (barOpen && e.target === e.currentTarget) {
-        setBarOpen(false)
-        setFocusedDial(null)
-        return
+        setBarOpen(false); setFocusedDial(null); return
       }
       isPanning.current = true
       lastPointer.current = { x: e.clientX, y: e.clientY }
@@ -130,8 +126,7 @@ export default function DialKit() {
         setParams((p) => {
           const raw = p[focusedDial] + dir * cfg.step
           const clamped = Math.min(cfg.max, Math.max(cfg.min, raw))
-          const rounded = Math.round(clamped / cfg.step) * cfg.step
-          return { ...p, [focusedDial]: rounded }
+          return { ...p, [focusedDial]: Math.round(clamped / cfg.step) * cfg.step }
         })
       } else {
         const factor = e.deltaY > 0 ? 0.93 : 1.075
@@ -146,7 +141,7 @@ export default function DialKit() {
       const dx = e.touches[1].clientX - e.touches[0].clientX
       const dy = e.touches[1].clientY - e.touches[0].clientY
       lastTouchDist.current = Math.sqrt(dx * dx + dy * dy)
-    } else if (e.touches.length === 1) {
+    } else {
       isPanning.current = true
       lastPointer.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
     }
@@ -181,10 +176,10 @@ export default function DialKit() {
         if (barOpen) setFocusedDial(null)
       } else if (e.key === 'Escape') {
         setBarOpen(false); setFocusedDial(null)
-      } else if (e.key === '1') setShape('spiral')
-      else if (e.key === '2') setShape('orbit')
-      else if (e.key === '3') setShape('globe')
-      else if (e.key === '4') setShape('cube')
+      } else if (e.key === '1') handleShapeChange('spiral')
+      else if (e.key === '2') handleShapeChange('orbit')
+      else if (e.key === '3') handleShapeChange('globe')
+      else if (e.key === '4') handleShapeChange('cube')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -209,9 +204,9 @@ export default function DialKit() {
     const canvas = canvasRef.current
     if (!canvas) return
     const resize = () => {
-      canvas.width  = window.innerWidth  * window.devicePixelRatio
+      canvas.width = window.innerWidth * window.devicePixelRatio
       canvas.height = window.innerHeight * window.devicePixelRatio
-      canvas.style.width  = `${window.innerWidth}px`
+      canvas.style.width = `${window.innerWidth}px`
       canvas.style.height = `${window.innerHeight}px`
     }
     resize()
@@ -225,13 +220,9 @@ export default function DialKit() {
     const loop = (ts: number) => {
       const dpr = window.devicePixelRatio || 1
       renderCanvas({
-        canvas,
-        images,
-        tiles,
-        panX: panX * dpr,
-        panY: panY * dpr,
-        zoom,
-        nightMode,
+        canvas, images, tiles,
+        panX: panX * dpr, panY: panY * dpr,
+        zoom, nightMode,
         tileSize: 120 * dpr,
         animOffset: ts,
         speed: params.speed,
@@ -252,11 +243,8 @@ export default function DialKit() {
       images, tiles,
       panX * dpr, panY * dpr,
       zoom, nightMode,
-      120 * dpr,
-      2400, 1600,
-      shape,
-      params.spread,
-      params.radius,
+      120 * dpr, 2400, 1600,
+      shape, params.spread, params.radius,
     )
     const a = document.createElement('a')
     a.href = url
@@ -269,16 +257,20 @@ export default function DialKit() {
   }, [])
 
   const handleShapeChange = useCallback((s: ShapeType) => {
-    setShape(s); refreshSeed()
+    setShape(s)
+    // Apply shape-specific default params while preserving radius/speed
+    setParams((prev) => ({
+      ...prev,
+      ...SHAPE_DEFAULTS[s],
+    }))
+    refreshSeed()
   }, [refreshSeed])
 
   const handleDeletePhotos = useCallback((indices: number[]) => {
     setImages((prev) => prev.filter((_, i) => !indices.includes(i)))
   }, [])
 
-  const handleResetPhotos = useCallback(() => {
-    setImages([])
-  }, [])
+  const handleResetPhotos = useCallback(() => { setImages([]) }, [])
 
   return (
     <div
